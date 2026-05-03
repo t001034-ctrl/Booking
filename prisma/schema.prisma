@@ -1,0 +1,44 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum CarStatus {
+  Available
+  Maintenance
+  Retired
+}
+
+model Car {
+  id          Int       @id @default(autoincrement())
+  make        String
+  model       String
+  year        Int
+  pricePerDay Float
+  status      CarStatus @default(Available)
+  imagePath   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  bookings    Booking[]
+}
+
+model Booking {
+  id           Int      @id @default(autoincrement())
+  carId        Int
+  car          Car      @relation(fields: [carId], references: [id])
+  customerName String
+  startDate    DateTime
+  endDate      DateTime
+  totalPrice   Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([carId])
+}
