@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { getServiceRoleClient } from "@/lib/supabase";
+import type { Booking, Car } from "@/lib/db-types";
 
 export const metadata = {
   title: "Booking confirmed | Booking",
@@ -8,7 +9,9 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-function formatDate(d: Date): string {
+function formatIsoDate(value: string): string {
+  const d = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -16,6 +19,10 @@ function formatDate(d: Date): string {
     timeZone: "UTC",
   });
 }
+
+type BookingWithCar = Booking & {
+  car: Pick<Car, "make" | "model" | "year">;
+};
 
 export default async function BookingSuccessPage({
   searchParams,
@@ -26,10 +33,14 @@ export default async function BookingSuccessPage({
   const bookingId = Number.parseInt(id ?? "", 10);
   if (!Number.isInteger(bookingId) || bookingId <= 0) notFound();
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: { car: true },
-  });
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*, car:cars(make, model, year)")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error) throw error;
+  const booking = data as BookingWithCar | null;
   if (!booking) notFound();
 
   return (
@@ -56,13 +67,13 @@ export default async function BookingSuccessPage({
           <div className="flex items-center justify-between px-4 py-3">
             <dt className="text-gray-600">Pickup</dt>
             <dd className="font-medium text-gray-900">
-              {formatDate(booking.startDate)}
+              {formatIsoDate(booking.startDate)}
             </dd>
           </div>
           <div className="flex items-center justify-between px-4 py-3">
             <dt className="text-gray-600">Return</dt>
             <dd className="font-medium text-gray-900">
-              {formatDate(booking.endDate)}
+              {formatIsoDate(booking.endDate)}
             </dd>
           </div>
           <div className="flex items-center justify-between px-4 py-3">

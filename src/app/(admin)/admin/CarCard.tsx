@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
-import { CarStatus } from "@/generated/prisma/enums";
+import type { CarStatus } from "@/lib/db-types";
 import { updateCarStatus } from "./actions";
 
 const ALL_STATUSES: CarStatus[] = ["Available", "Maintenance", "Retired"];

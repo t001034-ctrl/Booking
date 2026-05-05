@@ -1,14 +1,21 @@
 "use server";
 
-import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { CarStatus } from "@/generated/prisma/enums";
+import {
+  getServiceRoleClient,
+  STORAGE_BUCKET_CAR_IMAGES,
+} from "@/lib/supabase";
+import { CAR_STATUSES, type CarStatus } from "@/lib/db-types";
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export type AddCarState = {
@@ -40,7 +47,7 @@ export async function addCar(
     return { error: "Price per day must be a non-negative number." };
   }
 
-  if (!Object.values(CarStatus).includes(status)) {
+  if (!CAR_STATUSES.includes(status)) {
     return { error: "Invalid status value." };
   }
 
@@ -56,21 +63,35 @@ export async function addCar(
     return { error: "Image must be 5 MB or smaller." };
   }
 
-  const uploadsDir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(uploadsDir, { recursive: true });
+  const supabase = getServiceRoleClient();
 
-  const ext = path.extname(image.name) || `.${image.type.split("/")[1] ?? "bin"}`;
-  const filename = `${Date.now()}-${randomUUID()}${ext}`;
-  const filePath = path.join(uploadsDir, filename);
-
+  const ext =
+    path.extname(image.name) || `.${image.type.split("/")[1] ?? "bin"}`;
+  const objectName = `${Date.now()}-${randomUUID()}${ext}`;
   const bytes = Buffer.from(await image.arrayBuffer());
-  await writeFile(filePath, bytes);
 
-  const imagePath = `/uploads/${filename}`;
+  const { error: uploadErr } = await supabase.storage
+    .from(STORAGE_BUCKET_CAR_IMAGES)
+    .upload(objectName, bytes, { contentType: image.type, upsert: false });
+  if (uploadErr) {
+    return { error: `Image upload failed: ${uploadErr.message}` };
+  }
 
-  await prisma.car.create({
-    data: { make, model, year, pricePerDay, status, imagePath },
-  });
+  const { data: pub } = supabase.storage
+    .from(STORAGE_BUCKET_CAR_IMAGES)
+    .getPublicUrl(objectName);
+  const imagePath = pub.publicUrl;
+
+  const { error: insertErr } = await supabase
+    .from("cars")
+    .insert({ make, model, year, pricePerDay, status, imagePath });
+  if (insertErr) {
+    // best-effort cleanup of the orphaned upload
+    await supabase.storage
+      .from(STORAGE_BUCKET_CAR_IMAGES)
+      .remove([objectName]);
+    return { error: insertErr.message };
+  }
 
   revalidatePath("/admin");
   revalidatePath("/admin/add-car");

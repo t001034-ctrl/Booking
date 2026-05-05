@@ -128,7 +128,7 @@ export function AddCarForm({ added }: { added: boolean }) {
           className="mt-1 block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100"
         />
         <p className="mt-1 text-xs text-gray-500">
-          PNG, JPEG, WebP, or GIF up to 5 MB. Saved to /public/uploads.
+          PNG, JPEG, WebP, or GIF up to 5 MB.
         </p>
       </div>
 

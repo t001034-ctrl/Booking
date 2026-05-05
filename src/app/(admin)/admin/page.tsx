@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { getServiceRoleClient } from "@/lib/supabase";
+import type { Car } from "@/lib/db-types";
 import { CarCard } from "./CarCard";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +13,13 @@ export default async function AdminDashboard({
   const params = await searchParams;
   const justAdded = params.added === "1";
 
-  const cars = await prisma.car.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase
+    .from("cars")
+    .select("*")
+    .order("createdAt", { ascending: false });
+  if (error) throw error;
+  const cars = (data ?? []) as Car[];
 
   return (
     <div>

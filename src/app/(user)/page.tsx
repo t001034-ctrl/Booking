@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { getServiceRoleClient } from "@/lib/supabase";
+import type { Car } from "@/lib/db-types";
 
 export const dynamic = "force-dynamic";
 
@@ -9,10 +10,14 @@ export const metadata = {
 };
 
 export default async function UserGallery() {
-  const cars = await prisma.car.findMany({
-    where: { status: "Available" },
-    orderBy: { createdAt: "desc" },
-  });
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase
+    .from("cars")
+    .select("*")
+    .eq("status", "Available")
+    .order("createdAt", { ascending: false });
+  if (error) throw error;
+  const cars = (data ?? []) as Car[];
 
   return (
     <div>

@@ -1,13 +1,25 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { getServiceRoleClient } from "@/lib/supabase";
+import type { Car } from "@/lib/db-types";
 import { BookingForm } from "./BookingForm";
 
 export const dynamic = "force-dynamic";
 
 function todayIsoUtc(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+async function fetchCar(carId: number): Promise<Car | null> {
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase
+    .from("cars")
+    .select("*")
+    .eq("id", carId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as Car | null) ?? null;
 }
 
 export async function generateMetadata({
@@ -18,7 +30,7 @@ export async function generateMetadata({
   const { id } = await params;
   const carId = Number.parseInt(id, 10);
   if (!Number.isFinite(carId)) return { title: "Car not found" };
-  const car = await prisma.car.findUnique({ where: { id: carId } });
+  const car = await fetchCar(carId);
   if (!car) return { title: "Car not found" };
   return { title: `${car.make} ${car.model} | Booking` };
 }
@@ -32,7 +44,7 @@ export default async function CarDetailPage({
   const carId = Number.parseInt(id, 10);
   if (!Number.isInteger(carId) || carId <= 0) notFound();
 
-  const car = await prisma.car.findUnique({ where: { id: carId } });
+  const car = await fetchCar(carId);
   if (!car || car.status !== "Available") notFound();
 
   return (

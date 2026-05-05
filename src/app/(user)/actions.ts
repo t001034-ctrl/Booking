@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { getServiceRoleClient } from "@/lib/supabase";
+import type { Car } from "@/lib/db-types";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -54,7 +55,17 @@ export async function createBooking(
     return { error: "End date must be on or after the start date." };
   }
 
-  const car = await prisma.car.findUnique({ where: { id: carId } });
+  const supabase = getServiceRoleClient();
+
+  const { data: carData, error: carErr } = await supabase
+    .from("cars")
+    .select("id, pricePerDay, status")
+    .eq("id", carId)
+    .maybeSingle();
+  if (carErr) {
+    return { error: carErr.message };
+  }
+  const car = carData as Pick<Car, "id" | "pricePerDay" | "status"> | null;
   if (!car) {
     return { error: "That car could not be found." };
   }
@@ -65,15 +76,20 @@ export async function createBooking(
   const days = billableDays(startDate, endDate);
   const totalPrice = Number((car.pricePerDay * days).toFixed(2));
 
-  const booking = await prisma.booking.create({
-    data: {
+  const { data: booking, error: insertErr } = await supabase
+    .from("bookings")
+    .insert({
       carId: car.id,
       customerName,
-      startDate,
-      endDate,
+      startDate: startRaw,
+      endDate: endRaw,
       totalPrice,
-    },
-  });
+    })
+    .select("id")
+    .single();
+  if (insertErr || !booking) {
+    return { error: insertErr?.message ?? "Could not create booking." };
+  }
 
   revalidatePath("/admin/orders");
   redirect(`/booking/success?id=${booking.id}`);
